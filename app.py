@@ -1138,7 +1138,9 @@ with st.sidebar:
                 symbol = GLOBAL_INDICES.get(name)
                 if symbol:
                     data = fetch_index_data(symbol)
-                    if data:
+                    # fetch_index_data may return (None,None,None) on failure
+                    # make sure 'change' (index 1) is not None before using
+                    if data and data[1] is not None:
                         price, change, pct = data
                         color = "#00e676" if change >= 0 else "#ff5252"
                         arrow = "▲" if change >= 0 else "▼"

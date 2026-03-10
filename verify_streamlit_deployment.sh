@@ -194,6 +194,28 @@ fi
 echo ""
 
 # Test 8: Streamlit Config
+
+echo ""
+# Test 9: Index Data Resilience
+# ensure fetch_index_data won't crash when invalid symbol or missing data occurs
+echo "🔍 Test 9: Index Data Resilience"
+if python3 - <<'PYTHON'
+from app import fetch_index_data
+# invalid symbol should return tuple with None change and not raise
+res = fetch_index_data('INVALID')
+if res is None or res[1] is None:
+    print("  ✅ fetch_index_data handles missing data gracefully")
+    exit(0)
+else:
+    print("  ❌ Unexpected data returned", res)
+    exit(1)
+PYTHON
+then
+    echo "  ✅ PASS"
+else
+    echo "  ❌ FAIL: fetch_index_data crashed or returned bad values"
+    FAILED=$((FAILED+1))
+fi
 echo "🔍 Test 8: Streamlit Configuration"
 if [ -f ".streamlit/config.toml" ]; then
     if grep -q "primaryColor" .streamlit/config.toml; then
