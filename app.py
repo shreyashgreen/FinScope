@@ -402,6 +402,30 @@ GLOBAL_INDICES = {
     "Ethereum": "ETH-USD",
 }
 
+# Country to primary market index mapping
+COUNTRY_INDEX_MAP = {
+    "United States": ("S&P 500", "^GSPC"),
+    "India": ("NIFTY 50", "^NSEI"),
+    "United Kingdom": ("FTSE 100", "^FTSE"),
+    "Germany": ("DAX", "^GDAXI"),
+    "France": ("CAC 40", "^FCHI"),
+    "Japan": ("Nikkei 225", "^N225"),
+    "Hong Kong": ("Hang Seng", "^HSI"),
+    "Australia": ("ASX 200", "^AXJO"),
+    "Canada": ("TSX Composite", "^GSPTSE"),
+    "Brazil": ("Bovespa", "^BVSP"),
+    "Spain": ("IBEX 35", "^IBEX"),
+    "Switzerland": ("SMI", "^SSMI"),
+    "Netherlands": ("AEX", "^AEX"),
+    "Sweden": ("OMX Stockholm 30", "^OMX"),
+    "Singapore": ("STI", "^STI"),
+    "South Korea": ("KOSPI", "^KS11"),
+    "Taiwan": ("TAIEX", "^TWII"),
+    "Thailand": ("SET", "^SET.BK"),
+    "Malaysia": ("KLCI", "^KLSE"),
+    "Mexico": ("IPC", "^MXX"),
+}
+
 POPULAR_STOCKS = [
     "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK-B",
     "JPM", "V", "JNJ", "WMT", "PG", "MA", "UNH", "HD", "DIS", "BAC",
@@ -1766,6 +1790,93 @@ with tab3:
                 <div class="metric-value">{value}</div>
             </div>
             """, unsafe_allow_html=True)
+
+    # Stock Performance vs Market Index
+    st.markdown("### 📊 Stock Performance vs Market Index")
+    
+    stock_country = info.get("country", "United States")
+    index_info = COUNTRY_INDEX_MAP.get(stock_country)
+    
+    if index_info:
+        index_name, index_ticker = index_info
+        st.info(f"📍 Comparing **{selected_ticker}** against **{index_name}** (primary market index for {stock_country})")
+        
+        try:
+            # Fetch 1 year of data for comparison
+            stock_hist = fetch_history(selected_ticker, "1y", "1wk")
+            index_hist = fetch_history(index_ticker, "1y", "1wk")
+            
+            if not stock_hist.empty and not index_hist.empty:
+                # Calculate normalized performance (% change from start)
+                stock_perf = ((stock_hist['Close'] / stock_hist['Close'].iloc[0]) - 1) * 100
+                index_perf = ((index_hist['Close'] / index_hist['Close'].iloc[0]) - 1) * 100
+                
+                # Create comparison chart
+                fig_perf = go.Figure()
+                fig_perf.add_trace(go.Scatter(
+                    x=stock_hist.index,
+                    y=stock_perf.values,
+                    name=f"{selected_ticker} (Stock)",
+                    line=dict(color="#00e676", width=3),
+                ))
+                fig_perf.add_trace(go.Scatter(
+                    x=index_hist.index,
+                    y=index_perf.values,
+                    name=f"{index_name} (Index)",
+                    line=dict(color="#667eea", width=3),
+                ))
+                fig_perf.update_layout(
+                    title=f"1-Year Performance: {selected_ticker} vs {index_name}",
+                    xaxis_title="Date",
+                    yaxis_title="Performance (%)",
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    height=400,
+                    font=dict(family="Inter"),
+                    hovermode="x unified",
+                )
+                st.plotly_chart(fig_perf, use_container_width=True)
+                
+                # Performance metrics
+                stock_1y_return = stock_perf.iloc[-1]
+                index_1y_return = index_perf.iloc[-1]
+                outperformance = stock_1y_return - index_1y_return
+                
+                metric_col1, metric_col2, metric_col3 = st.columns(3)
+                with metric_col1:
+                    color = "green" if stock_1y_return >= 0 else "red"
+                    st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-label">{selected_ticker} 1Y Return</div>
+                        <div class="metric-value" style="color: {color};">{stock_1y_return:.2f}%</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with metric_col2:
+                    color = "green" if index_1y_return >= 0 else "red"
+                    st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-label">{index_name} 1Y Return</div>
+                        <div class="metric-value" style="color: {color};">{index_1y_return:.2f}%</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with metric_col3:
+                    color = "green" if outperformance >= 0 else "red"
+                    perf_label = "Outperformance" if outperformance >= 0 else "Underperformance"
+                    st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-label">{perf_label}</div>
+                        <div class="metric-value" style="color: {color};">{outperformance:.2f}%</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.warning("Could not fetch historical data for comparison")
+        except Exception as e:
+            st.warning(f"Could not load comparison data: {str(e)}")
+    else:
+        st.info(f"Market index mapping not available for {stock_country}")
 
 
 # ── TAB 4: PEER COMPARISON
