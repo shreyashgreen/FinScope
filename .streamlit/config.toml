@@ -32,18 +32,6 @@ gatherUsageStats = false
 [client.caching]
 cacheControlHeader = "public, max-age=3600"
 
-# For Streamlit Cloud
-[logger]
-level = "warning"
-
-[serverConfig]
-maxUploadSize = 10
-runOnSave = true
-
-# Typography & Responsive Design
-[theme]
-font = "sans serif"
-
 # Disable streamlit branding on mobile-friendly deployments
 # The CSS handles this with customization
 
