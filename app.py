@@ -349,6 +349,7 @@ st.markdown("""
         .stTabs [data-baseweb="tab"] {
             padding: 6px 10px;
             font-size: 0.7rem;
+            margin-right: 2px;
         }
         
         /* Single column layout hint */
