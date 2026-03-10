@@ -21,13 +21,37 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ─────────────────────────────────────────────
+# PERSISTENCE FUNCTIONS
+# ─────────────────────────────────────────────
+TICKER_FILE = 'selected_ticker.json'
+
+def load_selected_ticker():
+    """Load the last selected ticker from file."""
+    if os.path.exists(TICKER_FILE):
+        try:
+            with open(TICKER_FILE, 'r') as f:
+                data = json.load(f)
+                return data.get('ticker', 'AAPL')
+        except:
+            pass
+    return 'AAPL'
+
+def save_selected_ticker(ticker):
+    """Save the selected ticker to file."""
+    try:
+        with open(TICKER_FILE, 'w') as f:
+            json.dump({'ticker': ticker}, f)
+    except:
+        pass
+
+# ─────────────────────────────────────────────
 # PAGE CONFIG & THEME
 # ─────────────────────────────────────────────
 st.set_page_config(
     page_title="FinScope | Global Financial Dashboard",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ─────────────────────────────────────────────
@@ -1119,7 +1143,7 @@ with st.sidebar:
 
     # Advanced Search Integration
     if 'selected_ticker' not in st.session_state:
-        st.session_state.selected_ticker = "AAPL"
+        st.session_state.selected_ticker = load_selected_ticker()
     if 'search_query' not in st.session_state:
         st.session_state.search_query = ""
 
@@ -1141,6 +1165,7 @@ with st.sidebar:
         selected_option = st.selectbox("Select Result", options.keys(), index=0)
         if selected_option:
             st.session_state.selected_ticker = options[selected_option]
+            save_selected_ticker(st.session_state.selected_ticker)
 
     # Manual ticker input fallback
     st.markdown("")
@@ -1155,6 +1180,7 @@ with st.sidebar:
             test_info = test_stock.info
             if test_info and ('longName' in test_info or 'shortName' in test_info):
                 st.session_state.selected_ticker = manual_ticker.upper()
+                save_selected_ticker(st.session_state.selected_ticker)
                 st.sidebar.success(f"✅ Selected: {manual_ticker.upper()}")
             else:
                 st.sidebar.error("❌ Invalid ticker symbol. Please try again.")
@@ -1166,6 +1192,7 @@ with st.sidebar:
                                index=0, key="quick_pick")
     if quick_pick:
         st.session_state.selected_ticker = quick_pick
+        save_selected_ticker(st.session_state.selected_ticker)
 
     selected_ticker = st.session_state.selected_ticker
 
@@ -1246,6 +1273,7 @@ if not info or ('currentPrice' not in info and 'regularMarketPrice' not in info 
     with col2:
         if st.button("📋 Use Different Ticker", use_container_width=True):
             st.session_state.selected_ticker = "AAPL"  # Reset to default
+            save_selected_ticker(st.session_state.selected_ticker)
             st.rerun()
     
     st.stop()
@@ -1299,6 +1327,52 @@ for col, (label, value) in zip(metrics_cols, metric_items):
             <div class="metric-value">{value}</div>
         </div>
         """, unsafe_allow_html=True)
+
+st.markdown("")
+
+# Change Stock Button for Mobile Optimization
+if st.button("🔄 Change Stock", help="Change the selected stock ticker"):
+    st.session_state.show_search = True
+
+if 'show_search' in st.session_state and st.session_state.show_search:
+    st.markdown("### 🔍 Search for a Company or Ticker")
+    
+    search_query_main = st.text_input("Search Company or Ticker", placeholder="e.g. Apple, Reliance, Tesla...", key="main_search")
+    
+    if search_query_main:
+        results = search_ticker(search_query_main)
+        
+        if results:
+            options = {f"{r['name']} ({r['symbol']}) - {r['exchange']}": r['symbol'] for r in results}
+            selected_option = st.selectbox("Select Result", list(options.keys()), key="main_select")
+            
+            if st.button("Select This Stock", key="select_btn"):
+                st.session_state.selected_ticker = options[selected_option]
+                save_selected_ticker(st.session_state.selected_ticker)
+                st.session_state.show_search = False
+                st.rerun()
+        else:
+            st.warning("No results found. Try a different search term.")
+    
+    manual_ticker_main = st.text_input("Or enter ticker symbol directly", placeholder="e.g. AAPL, RELIANCE.NS", key="main_manual")
+    
+    if manual_ticker_main:
+        if st.button("Use This Ticker", key="manual_btn"):
+            st.session_state.selected_ticker = manual_ticker_main.upper()
+            save_selected_ticker(st.session_state.selected_ticker)
+            st.session_state.show_search = False
+            st.rerun()
+    
+    quick_pick_main = st.selectbox("Quick Pick", [""] + POPULAR_STOCKS, key="main_quick")
+    
+    if quick_pick_main:
+        st.session_state.selected_ticker = quick_pick_main
+        save_selected_ticker(st.session_state.selected_ticker)
+        st.session_state.show_search = False
+        st.rerun()
+    
+    if st.button("Cancel", key="cancel_search"):
+        st.session_state.show_search = False
 
 st.markdown("")
 
