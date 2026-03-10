@@ -1744,12 +1744,17 @@ with tab4:
         comparison_tickers = []
 
     if comparison_tickers:
-        with st.spinner(f"Comparing {stock1.upper()} with {stock2.upper()}..."):
+        # Add native benchmark index to comparison
+        native_benchmark = fetch_native_benchmark(stock1.upper())
+        if native_benchmark != 'N/A':
+            comparison_tickers.append(native_benchmark)
+
+        with st.spinner(f"Comparing {stock1.upper()} with {stock2.upper()} and benchmark..."):
             peer_df = fetch_peer_data(comparison_tickers)
 
         if not peer_df.empty:
             # Peer overview
-            st.markdown("#### Stock Overview")
+            st.markdown("#### Stock Overview with Benchmark")
             overview_cols = st.columns(len(comparison_tickers))
             for i, (_, row) in enumerate(peer_df.iterrows()):
                 if i < len(overview_cols):
