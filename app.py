@@ -966,6 +966,9 @@ def generate_research_pdf(ticker: str, info: dict, hist: pd.DataFrame,
         ("P/E Ratio (Forward)", fmt(info.get("forwardPE"))),
         ("PEG Ratio", fmt(info.get("pegRatio"))),
         ("Price to Book", fmt(info.get("priceToBook"))),
+        ("Price to Sales", fmt(info.get("priceToSalesTrailing12Months"))),
+        ("EV/EBITDA", fmt(info.get("enterpriseToEbitda"))),
+        ("EV/Revenue", fmt(info.get("enterpriseToRevenue"))),
         ("EPS (Trailing)", fmt(info.get("trailingEps"), prefix=f"{currency} ")),
         ("EPS (Forward)", fmt(info.get("forwardEps"), prefix=f"{currency} ")),
         ("Dividend Yield", fmt(info.get("dividendYield", 0) * 100 if info.get("dividendYield") else None, suffix="%")),
@@ -975,8 +978,14 @@ def generate_research_pdf(ticker: str, info: dict, hist: pd.DataFrame,
         ("Operating Margins", fmt(info.get("operatingMargins", 0) * 100 if info.get("operatingMargins") else None, suffix="%")),
         ("Profit Margins", fmt(info.get("profitMargins", 0) * 100 if info.get("profitMargins") else None, suffix="%")),
         ("ROE", fmt(info.get("returnOnEquity", 0) * 100 if info.get("returnOnEquity") else None, suffix="%")),
+        ("ROA", fmt(info.get("returnOnAssets", 0) * 100 if info.get("returnOnAssets") else None, suffix="%")),
         ("Debt to Equity", fmt(info.get("debtToEquity"))),
         ("Free Cash Flow", fmt(info.get("freeCashflow"), prefix=f"{currency} ", div=1e9)),
+        ("Total Cash", fmt(info.get("totalCash"), prefix=f"{currency} ", div=1e9)),
+        ("Total Debt", fmt(info.get("totalDebt"), prefix=f"{currency} ", div=1e9)),
+        ("Book Value", fmt(info.get("bookValue"), prefix=f"{currency} ")),
+        ("Trailing Annual Dividend Rate", fmt(info.get("trailingAnnualDividendRate"), prefix=f"{currency} ")),
+        ("Five Year Avg Dividend Yield", fmt(info.get("fiveYearAvgDividendYield", 0) * 100 if info.get("fiveYearAvgDividendYield") else None, suffix="%")),
     ]
 
     for key, val in metrics:
@@ -1241,7 +1250,7 @@ with st.sidebar:
     </p>
     """, unsafe_allow_html=True)
 
-    if st.button("🔄 Refresh Data", use_container_width=True):
+    if st.button("🔄 Refresh Data", width="stretch"):
         st.cache_data.clear()
         st.rerun()
 
@@ -1383,7 +1392,7 @@ st.markdown("")
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📈 Price Charts",
     "🎯 Analyst Recommendations",
-    "📰 News",
+    "� Stock Analysis",
     "⚖️ Peer Comparison",
     "📜 Historical Actions",
     "📊 Financials",
@@ -1479,7 +1488,7 @@ with tab1:
         fig.update_xaxes(gridcolor="rgba(255,255,255,0.04)", zeroline=False)
         fig.update_yaxes(gridcolor="rgba(255,255,255,0.04)", zeroline=False)
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         # Price statistics
         st.markdown('<div class="section-header">Price Statistics</div>', unsafe_allow_html=True)
@@ -1610,7 +1619,7 @@ with tab2:
                 yaxis=dict(showgrid=False),
                 font=dict(family="Inter"),
             )
-            st.plotly_chart(fig_rec, use_container_width=True)
+            st.plotly_chart(fig_rec, width="stretch")
 
         # Table
         display_recs = recs.tail(25).sort_index(ascending=False)
@@ -1620,269 +1629,231 @@ with tab2:
 
 
 # ── TAB 3: NEWS
+# ── TAB 3: STOCK ANALYSIS
 with tab3:
-    st.markdown('<div class="section-header">Latest Market News & Analysis</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">Comprehensive Stock Analysis & Financial Ratios</div>', unsafe_allow_html=True)
 
-    # Note about yfinance news source
-    st.info("📰 **Real-Time News:** News is fetched from Yahoo Finance providing live market insights and company updates sorted by domain expertise.")
+    # Valuation Ratios
+    st.markdown("#### 📊 Valuation Ratios")
+    val_cols = st.columns(4)
+    val_ratios = [
+        ("P/E Ratio (Trailing)", info.get('trailingPE'), "Price to Earnings"),
+        ("P/E Ratio (Forward)", info.get('forwardPE'), "Forward Price to Earnings"),
+        ("PEG Ratio", info.get('pegRatio'), "Price/Earnings to Growth"),
+        ("Price to Book", info.get('priceToBook'), "Price to Book Value"),
+    ]
+    for col, (label, value, desc) in zip(val_cols, val_ratios):
+        with col:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">{label}</div>
+                <div class="metric-value">{f"{value:.2f}" if value else "N/A"}</div>
+                <div style="color: rgba(255,255,255,0.5); font-size: 0.7rem; margin-top: 0.3rem;">{desc}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # News controls
-    news_col1, news_col2, news_col3 = st.columns([2, 1, 1])
+    # Profitability Ratios
+    st.markdown("#### 💰 Profitability Ratios")
+    prof_cols = st.columns(4)
+    prof_ratios = [
+        ("Gross Margin", info.get('grossMargins') * 100 if info.get('grossMargins') else None, "%"),
+        ("Operating Margin", info.get('operatingMargins') * 100 if info.get('operatingMargins') else None, "%"),
+        ("Profit Margin", info.get('profitMargins') * 100 if info.get('profitMargins') else None, "%"),
+        ("ROE", info.get('returnOnEquity') * 100 if info.get('returnOnEquity') else None, "%"),
+    ]
+    for col, (label, value, unit) in zip(prof_cols, prof_ratios):
+        with col:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">{label}</div>
+                <div class="metric-value">{f"{value:.2f}{unit}" if value else "N/A"}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # News source options (yfinance only)
-    available_sources = ["All Sources", "Yahoo Finance"]
+    # Growth & Efficiency Ratios
+    st.markdown("#### 📈 Growth & Efficiency Ratios")
+    growth_cols = st.columns(4)
+    growth_ratios = [
+        ("Revenue Growth", info.get('revenueGrowth') * 100 if info.get('revenueGrowth') else None, "%"),
+        ("Earnings Growth", info.get('earningsGrowth') * 100 if info.get('earningsGrowth') else None, "%"),
+        ("ROA", info.get('returnOnAssets') * 100 if info.get('returnOnAssets') else None, "%"),
+        ("Debt to Equity", info.get('debtToEquity'), ""),
+    ]
+    for col, (label, value, unit) in zip(growth_cols, growth_ratios):
+        with col:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">{label}</div>
+                <div class="metric-value">{f"{value:.2f}{unit}" if value else "N/A"}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    with news_col1:
-        news_source = st.selectbox("News Source", available_sources)
-    with news_col2:
-        sentiment_filter = st.selectbox("Sentiment", ["All", "Positive", "Negative", "Neutral"])
-    with news_col3:
-        category_filter = st.selectbox("Category", ["All", "Earnings", "Mergers", "Regulatory", "Product", "Market", "Executive", "Economic", "General"])
+    # Market & Dividend Ratios
+    st.markdown("#### 🏛️ Market & Dividend Ratios")
+    market_cols = st.columns(4)
+    market_ratios = [
+        ("Beta", info.get('beta'), "Volatility measure"),
+        ("Dividend Yield", info.get('dividendYield') * 100 if info.get('dividendYield') else None, "%"),
+        ("Payout Ratio", info.get('payoutRatio') * 100 if info.get('payoutRatio') else None, "%"),
+        ("Enterprise Value/EBITDA", info.get('enterpriseToEbitda'), ""),
+    ]
+    for col, (label, value, unit) in zip(market_cols, market_ratios):
+        with col:
+            desc = "Volatility measure" if label == "Beta" else ("Dividend yield" if label == "Dividend Yield" else ("Payout ratio" if label == "Payout Ratio" else ""))
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">{label}</div>
+                <div class="metric-value">{f"{value:.2f}{unit}" if value else "N/A"}</div>
+                <div style="color: rgba(255,255,255,0.5); font-size: 0.7rem; margin-top: 0.3rem;">{desc}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # Fetch enhanced news
-    company_name = info.get("longName", "").split()[0] if info.get("longName") else None
-    news_items = fetch_enhanced_news(selected_ticker, company_name)
-
-    # Filter news
-    filtered_news = []
-    for item in news_items:
-        # Source filter
-        if news_source != "All Sources" and item.get('source') != news_source:
-            continue
-
-        # Sentiment filter
-        if sentiment_filter != "All" and item.get('sentiment') != sentiment_filter.lower():
-            continue
-
-        # Category filter
-        if category_filter != "All":
-            item_category = categorize_news(item.get('title', ''), item.get('summary', ''))
-            if item_category != category_filter:
-                continue
-
-        filtered_news.append(item)
-
-    if filtered_news:
-        # News statistics
-        sentiment_counts = {}
-        category_counts = {}
-        for item in filtered_news:
-            sent = item.get('sentiment', 'neutral')
-            sentiment_counts[sent] = sentiment_counts.get(sent, 0) + 1
-
-            cat = categorize_news(item.get('title', ''), item.get('summary', ''))
-            category_counts[cat] = category_counts.get(cat, 0) + 1
-
-        stat_col1, stat_col2, stat_col3 = st.columns(3)
-        with stat_col1:
-            total_news = len(filtered_news)
-            st.metric("Total Articles", total_news)
-        with stat_col2:
-            pos_pct = (sentiment_counts.get('positive', 0) / total_news * 100) if total_news > 0 else 0
-            st.metric("Positive Sentiment", f"{pos_pct:.1f}%")
-        with stat_col3:
-            top_cat = max(category_counts.items(), key=lambda x: x[1])[0] if category_counts else "N/A"
-            st.metric("Top Category", top_cat)
-
-        st.markdown("---")
-
-        # Display news items
-        for idx, n in enumerate(filtered_news[:15]):
-            with st.container():
-                col_n1, col_n2 = st.columns([1, 4])
-
-                # Thumbnail
-                thumb = None
-                if "thumbnail" in n and n["thumbnail"] and "resolutions" in n["thumbnail"]:
-                    thumb = n["thumbnail"]["resolutions"][0]["url"]
-                elif n.get('thumbnail') and isinstance(n['thumbnail'], dict):
-                    thumb = n['thumbnail'].get('url')
-
-                with col_n1:
-                    if thumb:
-                        try:
-                            st.image(thumb, use_container_width=True)
-                        except:
-                            st.markdown("""
-                            <div style="background: rgba(255,255,255,0.05); aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-                                <span style="font-size: 2rem; opacity: 0.3;">📰</span>
-                            </div>
-                            """, unsafe_allow_html=True)
-                    else:
-                        st.markdown("""
-                        <div style="background: rgba(255,255,255,0.05); aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-                            <span style="font-size: 2rem; opacity: 0.3;">📰</span>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                with col_n2:
-                    # Title with sentiment indicator
-                    sentiment = n.get('sentiment', 'neutral')
-                    sentiment_emoji = {'positive': '🟢', 'negative': '🔴', 'neutral': '🟡'}.get(sentiment, '🟡')
-                    category = categorize_news(n.get('title', ''), n.get('summary', ''))
-
-                    st.markdown(f"#### {sentiment_emoji} [{n.get('title')}]({n.get('link', '#')})")
-
-                    # Metadata
-                    pub_time = datetime.fromtimestamp(n.get('providerPublishTime', 0)).strftime('%Y-%m-%d %H:%M')
-                    source = n.get('source', 'Unknown')
-                    publisher = n.get('publisher', 'Unknown')
-
-                    st.markdown(f"""
-                    <p style="color: rgba(255,255,255,0.4); font-size: 0.8rem; margin: 0.2rem 0;">
-                        <strong>{publisher}</strong> • {pub_time} • {source} • {category}
-                    </p>
-                    """, unsafe_allow_html=True)
-
-                    # Summary
-                    summary = n.get('summary', '')
-                    if summary and len(summary) > 50:
-                        st.markdown(f"""
-                        <p style="color: rgba(255,255,255,0.7); font-size: 0.85rem; margin: 0.5rem 0; line-height: 1.4;">
-                            {summary[:200]}{'...' if len(summary) > 200 else ''}
-                        </p>
-                        """, unsafe_allow_html=True)
-
-                st.markdown('<div style="margin: 1.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);"></div>', unsafe_allow_html=True)
-    else:
-        st.info(f"No news found for {selected_ticker} matching your filters. Try adjusting the filters or check back later.")
+    # Additional Financial Metrics
+    st.markdown("#### 📋 Additional Financial Metrics")
+    add_cols = st.columns(3)
+    add_metrics = [
+        ("Market Cap", f"{currency} {info.get('marketCap', 0)/1e9:.2f}B" if info.get('marketCap') else "N/A"),
+        ("Enterprise Value", f"{currency} {info.get('enterpriseValue', 0)/1e9:.2f}B" if info.get('enterpriseValue') else "N/A"),
+        ("Free Cash Flow", f"{currency} {info.get('freeCashflow', 0)/1e9:.2f}B" if info.get('freeCashflow') else "N/A"),
+    ]
+    for col, (label, value) in zip(add_cols, add_metrics):
+        with col:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">{label}</div>
+                <div class="metric-value">{value}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 
 # ── TAB 4: PEER COMPARISON
 with tab4:
-    st.markdown('<div class="section-header">Intelligent Global Peer Comparison</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">Global Stock Comparison</div>', unsafe_allow_html=True)
 
-    # Peer selection method
-    peer_method = st.radio("Peer Selection Method",
-                          ["Industry Leaders", "Intelligent Matching", "Custom Selection"],
-                          horizontal=True)
+    # Stock selection for comparison
+    comp_col1, comp_col2 = st.columns(2)
+    with comp_col1:
+        stock1 = st.text_input("First Stock Ticker", value=selected_ticker.upper(), placeholder="e.g., AAPL")
+    with comp_col2:
+        stock2 = st.text_input("Second Stock Ticker", value="", placeholder="e.g., MSFT")
 
-    if peer_method == "Custom Selection":
-        custom_peers = st.multiselect("Select Peer Companies",
-                                     POPULAR_STOCKS + [t for t in GLOBAL_INDICES.keys() if t not in GLOBAL_INDICES],
-                                     default=[], max_selections=5)
-        comparison_tickers = [selected_ticker] + custom_peers
+    if stock1 and stock2:
+        comparison_tickers = [stock1.upper(), stock2.upper()]
     else:
-        # Get intelligent peers
-        market_cap = info.get('marketCap')
-        country = info.get('country')
-        if peer_method == "Intelligent Matching":
-            peers = get_intelligent_peers(selected_ticker, industry, sector, market_cap, country)
-        else:  # Industry Leaders
-            peers = get_industry_peers(industry, sector)
+        st.warning("Please enter both stock tickers to compare.")
+        comparison_tickers = []
 
-        comparison_tickers = list(dict.fromkeys([selected_ticker] + peers))[:6]
+    if comparison_tickers:
+        with st.spinner(f"Comparing {stock1.upper()} with {stock2.upper()}..."):
+            peer_df = fetch_peer_data(comparison_tickers)
 
-    with st.spinner(f"Comparing {selected_ticker} with {len(comparison_tickers)-1} peer companies..."):
-        peer_df = fetch_peer_data(comparison_tickers)
+        if not peer_df.empty:
+            # Peer overview
+            st.markdown("#### Stock Overview")
+            overview_cols = st.columns(len(comparison_tickers))
+            for i, (_, row) in enumerate(peer_df.iterrows()):
+                if i < len(overview_cols):
+                    with overview_cols[i]:
+                        is_selected = row['Ticker'] == stock1.upper()
+                        border_style = "border: 2px solid #667eea;" if is_selected else "border: 1px solid rgba(255,255,255,0.1);"
 
-    if not peer_df.empty:
-        # Peer overview
-        st.markdown("#### Peer Company Overview")
-        overview_cols = st.columns(len(comparison_tickers))
-        for i, (_, row) in enumerate(peer_df.iterrows()):
-            if i < len(overview_cols):
-                with overview_cols[i]:
-                    is_selected = row['Ticker'] == selected_ticker
-                    border_style = "border: 2px solid #667eea;" if is_selected else "border: 1px solid rgba(255,255,255,0.1);"
-
-                    st.markdown(f"""
-                    <div style="background: rgba(255,255,255,0.03); {border_style} border-radius: 10px; padding: 1rem; text-align: center; margin-bottom: 0.5rem;">
-                        <div style="font-weight: 700; font-size: 1.1rem; color: {'#667eea' if is_selected else '#ffffff'};">
-                            {row['Ticker']}
+                        st.markdown(f"""
+                        <div style="background: rgba(255,255,255,0.03); {border_style} border-radius: 10px; padding: 1rem; text-align: center; margin-bottom: 0.5rem;">
+                            <div style="font-weight: 700; font-size: 1.1rem; color: {'#667eea' if is_selected else '#ffffff'};">
+                                {row['Ticker']}
+                            </div>
+                            <div style="font-size: 0.8rem; color: rgba(255,255,255,0.6); margin: 0.2rem 0;">
+                                {row['Name'][:20]}{'...' if len(str(row['Name'])) > 20 else ''}
+                            </div>
+                            <div style="font-size: 1rem; font-weight: 600; color: #ffffff;">
+                                {row['Currency']} {row['Price']:,.2f}
+                            </div>
                         </div>
-                        <div style="font-size: 0.8rem; color: rgba(255,255,255,0.6); margin: 0.2rem 0;">
-                            {row['Name'][:20]}{'...' if len(str(row['Name'])) > 20 else ''}
-                        </div>
-                        <div style="font-size: 1rem; font-weight: 600; color: #ffffff;">
-                            {row['Currency']} {row['Price']:,.2f}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
 
-        st.markdown("---")
+            st.markdown("---")
 
-        # Comparison Table
-        st.markdown("#### Key Metrics Comparison")
-        formatted_df = peer_df.copy()
+            # Comparison Table
+            st.markdown("#### Key Metrics Comparison")
+            formatted_df = peer_df.copy()
 
-        # Format market cap
-        formatted_df["Market Cap"] = formatted_df["Market Cap"].apply(
-            lambda x: f"{x/1e9:,.2f}B" if pd.notnull(x) and x > 0 else "N/A"
-        )
+            # Format market cap
+            formatted_df["Market Cap"] = formatted_df["Market Cap"].apply(
+                lambda x: f"{x/1e9:,.2f}B" if pd.notnull(x) and x > 0 else "N/A"
+            )
 
-        # Format revenue
-        formatted_df["Revenue"] = formatted_df["Revenue"].apply(
-            lambda x: f"{x/1e9:,.2f}B" if pd.notnull(x) and x > 0 else "N/A"
-        )
+            # Format revenue
+            formatted_df["Revenue"] = formatted_df["Revenue"].apply(
+                lambda x: f"{x/1e9:,.2f}B" if pd.notnull(x) and x > 0 else "N/A"
+            )
 
-        # Format dividend yield
-        formatted_df["Div Yield"] = formatted_df["Div Yield"].apply(
-            lambda x: f"{x*100:.2f}%" if pd.notnull(x) and x > 0 else "N/A"
-        )
+            # Format dividend yield
+            formatted_df["Div Yield"] = formatted_df["Div Yield"].apply(
+                lambda x: f"{x*100:.2f}%" if pd.notnull(x) and x > 0 else "N/A"
+            )
 
-        # Format P/E ratio
-        formatted_df["P/E Ratio"] = formatted_df["P/E Ratio"].apply(
-            lambda x: f"{x:.2f}" if pd.notnull(x) and x > 0 else "N/A"
-        )
+            # Format P/E ratio
+            formatted_df["P/E Ratio"] = formatted_df["P/E Ratio"].apply(
+                lambda x: f"{x:.2f}" if pd.notnull(x) and x > 0 else "N/A"
+            )
 
-        # Highlight selected company
-        def highlight_selected(val):
-            if val == selected_ticker:
-                return 'background-color: rgba(102,126,234,0.2)'
-            return ''
+            # Highlight first stock
+            def highlight_selected(val):
+                if val == stock1.upper():
+                    return 'background-color: rgba(102,126,234,0.2)'
+                return ''
 
-        styled_df = formatted_df.drop(columns=["Currency"]).style.applymap(
-            highlight_selected, subset=["Ticker"]
-        )
+            styled_df = formatted_df.drop(columns=["Currency"]).style.applymap(
+                highlight_selected, subset=["Ticker"]
+            )
 
-        st.dataframe(styled_df, use_container_width=True)
+            st.dataframe(styled_df, width="stretch")
 
-        # Performance comparison
-        st.markdown("#### Relative Performance Comparison")
-        perf_periods = st.multiselect("Compare Performance Over",
-                                     ["1 Month", "3 Months", "6 Months", "1 Year", "2 Years"],
-                                     default=["1 Year"], max_selections=3)
+            # Performance comparison
+            st.markdown("#### Relative Performance Comparison")
+            perf_periods = st.multiselect("Compare Performance Over",
+                                         ["1 Month", "3 Months", "6 Months", "1 Year", "2 Years"],
+                                         default=["1 Year"], max_selections=3)
 
-        for period in perf_periods:
-            period_key = PERIOD_MAP[period]
-            interval_key = INTERVAL_MAP[period]
+            for period in perf_periods:
+                period_key = PERIOD_MAP[period]
+                interval_key = INTERVAL_MAP[period]
 
-            comp_hist = {}
-            for t in comparison_tickers:
-                h = fetch_history(t, period_key, interval_key)
-                if not h.empty and len(h) > 1:
-                    # Normalize to percentage change from start
-                    start_price = h["Close"].iloc[0]
-                    comp_hist[t] = ((h["Close"] - start_price) / start_price) * 100
+                comp_hist = {}
+                for t in comparison_tickers:
+                    h = fetch_history(t, period_key, interval_key)
+                    if not h.empty and len(h) > 1:
+                        # Normalize to percentage change from start
+                        start_price = h["Close"].iloc[0]
+                        comp_hist[t] = ((h["Close"] - start_price) / start_price) * 100
 
-            if comp_hist:
-                fig_perf = go.Figure()
-                for t, series in comp_hist.items():
-                    is_selected = t == selected_ticker
-                    fig_perf.add_trace(go.Scatter(
-                        x=series.index, y=series, mode="lines",
-                        name=f"{t} ({peer_df[peer_df['Ticker']==t]['Name'].iloc[0][:15] if not peer_df[peer_df['Ticker']==t].empty else t})",
-                        line=dict(width=3 if is_selected else 2, color='#667eea' if is_selected else None),
-                        opacity=1 if is_selected else 0.7
-                    ))
+                if comp_hist:
+                    fig_perf = go.Figure()
+                    for t, series in comp_hist.items():
+                        is_selected = t == stock1.upper()
+                        fig_perf.add_trace(go.Scatter(
+                            x=series.index, y=series, mode="lines",
+                            name=f"{t} ({peer_df[peer_df['Ticker']==t]['Name'].iloc[0][:15] if not peer_df[peer_df['Ticker']==t].empty else t})",
+                            line=dict(width=3 if is_selected else 2, color='#667eea' if is_selected else None),
+                            opacity=1 if is_selected else 0.7
+                        ))
 
-                fig_perf.update_layout(
-                    title=f"Relative Performance - {period}",
-                    template="plotly_dark",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    height=400,
-                    margin=dict(l=0, r=0, t=40, b=0),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                    font=dict(family="Inter"),
-                    xaxis=dict(gridcolor="rgba(255,255,255,0.04)", zeroline=False),
-                    yaxis=dict(gridcolor="rgba(255,255,255,0.04)", zeroline=False, title="% Change")
-                )
-                st.plotly_chart(fig_perf, use_container_width=True)
+                    fig_perf.update_layout(
+                        title=f"Relative Performance - {period}",
+                        template="plotly_dark",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        height=400,
+                        margin=dict(l=0, r=0, t=40, b=0),
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                        font=dict(family="Inter"),
+                        xaxis=dict(gridcolor="rgba(255,255,255,0.04)", zeroline=False),
+                        yaxis=dict(gridcolor="rgba(255,255,255,0.04)", zeroline=False, title="% Change")
+                    )
+                    st.plotly_chart(fig_perf, width="stretch")
 
-    else:
-        st.warning("Unable to fetch peer comparison data. Please try again later.")
+        else:
+            st.warning("Unable to fetch peer comparison data. Please try again later.")
 
 
 # ── TAB 5: HISTORICAL ACTIONS
@@ -1918,7 +1889,7 @@ with tab5:
                         yaxis=dict(gridcolor="rgba(255,255,255,0.04)", title="Amount"),
                         font=dict(family="Inter"),
                     )
-                    st.plotly_chart(fig_div, use_container_width=True)
+                    st.plotly_chart(fig_div, width="stretch")
 
                     # Stats
                     total_div = divs["Dividends"].sum()
@@ -1937,9 +1908,7 @@ with tab5:
                         <div class="metric-value">{yield_str}</div></div>""", unsafe_allow_html=True)
 
                     st.markdown("")
-                    st.dataframe(divs.sort_index(ascending=False).head(30), use_container_width=True)
-                else:
-                    st.info("No dividend payments recorded.")
+                    st.dataframe(divs.sort_index(ascending=False).head(30), width="stretch")
 
         # Splits
         if "Stock Splits" in actions.columns:
@@ -1952,7 +1921,7 @@ with tab5:
                         date_str = idx.strftime("%Y-%m-%d") if hasattr(idx, 'strftime') else str(idx)[:10]
                         ratio = row["Stock Splits"]
                         split_data.append({"Date": date_str, "Split Ratio": f"{ratio}:1"})
-                    st.dataframe(pd.DataFrame(split_data), use_container_width=True)
+                    st.dataframe(pd.DataFrame(split_data), width="stretch")
                 else:
                     st.info("No stock splits recorded.")
     else:
@@ -1970,7 +1939,7 @@ with tab5:
             data=csv_buffer,
             file_name=f"{selected_ticker}_historical_{dl_period.replace(' ', '_').lower()}.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
         )
 
 
@@ -1983,19 +1952,19 @@ with tab6:
 
     with fin_tab1:
         if not income.empty:
-            st.dataframe(income, use_container_width=True, height=450)
+            st.dataframe(income, width="stretch", height=450)
         else:
             st.info("Income statement data not available.")
 
     with fin_tab2:
         if not balance.empty:
-            st.dataframe(balance, use_container_width=True, height=450)
+            st.dataframe(balance, width="stretch", height=450)
         else:
             st.info("Balance sheet data not available.")
 
     with fin_tab3:
         if not cashflow.empty:
-            st.dataframe(cashflow, use_container_width=True, height=450)
+            st.dataframe(cashflow, width="stretch", height=450)
         else:
             st.info("Cash flow data not available.")
 
@@ -2035,7 +2004,7 @@ with tab6:
                 xaxis=dict(gridcolor="rgba(255,255,255,0.04)"),
                 yaxis=dict(gridcolor="rgba(255,255,255,0.04)", title=f"Amount ({currency} Billions)"),
             )
-            st.plotly_chart(fig_fin, use_container_width=True)
+            st.plotly_chart(fig_fin, width="stretch")
 
 
 # ── TAB 7: RESEARCH REPORT
@@ -2058,7 +2027,7 @@ with tab7:
     report_period = st.selectbox("Historical data period for report",
                                   list(PERIOD_MAP.keys()), index=5, key="report_period")
 
-    if st.button("🚀 Generate Research Report", use_container_width=True, type="primary"):
+    if st.button("🚀 Generate Research Report", width="stretch", type="primary"):
         with st.spinner("Generating comprehensive equity research report..."):
             report_info = fetch_stock_data(selected_ticker)
             report_stock = yf.Ticker(selected_ticker)
@@ -2081,7 +2050,7 @@ with tab7:
             data=pdf_bytes,
             file_name=f"FinScope_{selected_ticker}_Research_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
             mime="application/pdf",
-            use_container_width=True,
+            width="stretch",
         )
 
         # Preview
