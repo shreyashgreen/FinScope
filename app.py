@@ -808,17 +808,45 @@ def analyze_sentiment(text: str):
 
 
 def format_currency(value, currency="USD"):
-    """Format currency values with M, B, K suffixes."""
+    """Format currency values with M, B, K suffixes and local currency symbols."""
+    currency_symbols = {
+        "USD": "$",
+        "EUR": "€",
+        "GBP": "£",
+        "INR": "₹",
+        "JPY": "¥",
+        "CNY": "¥",
+        "AUD": "A$",
+        "CAD": "C$",
+        "CHF": "CHF",
+        "ZAR": "R",
+    }
+    symbol = currency_symbols.get(currency, "$")
+
     if pd.notnull(value) and value != 0:
         if abs(value) >= 1e9:
-            return f"${value/1e9:.2f}B"
+            return f"{symbol}{value/1e9:.2f}B"
         elif abs(value) >= 1e6:
-            return f"${value/1e6:.2f}M"
+            return f"{symbol}{value/1e6:.2f}M"
         elif abs(value) >= 1e3:
-            return f"${value/1e3:.2f}K"
+            return f"{symbol}{value/1e3:.2f}K"
         else:
-            return f"${value:,.2f}"
+            return f"{symbol}{value:,.2f}"
     return "N/A"
+
+def format_financials_df(df: pd.DataFrame, currency="USD"):
+    """Format financial statement DataFrame with truncated numbers (M, B, K suffixes)."""
+    if df.empty:
+        return df
+    
+    formatted_df = df.copy()
+    
+    for col in formatted_df.columns:
+        formatted_df[col] = formatted_df[col].apply(
+            lambda x: format_currency(x, currency=currency) if isinstance(x, (int, float)) else x
+        )
+    
+    return formatted_df
 
 def categorize_news(title: str, summary: str = ""):
     """Categorize news into topics."""
@@ -1795,13 +1823,13 @@ with tab4:
             def format_currency(value, currency="USD"):
                 if pd.notnull(value) and value > 0:
                     if value >= 1e9:
-                        return f"${value/1e9:.2f}B"
+                        return f"{value/1e9:.2f}B"
                     elif value >= 1e6:
-                        return f"${value/1e6:.2f}M"
+                        return f"{value/1e6:.2f}M"
                     elif value >= 1e3:
-                        return f"${value/1e3:.2f}K"
+                        return f"{value/1e3:.2f}K"
                     else:
-                        return f"${value:,.2f}"
+                        return f"{value:,.2f}"
                 return "N/A"
 
             # Format market cap
@@ -1970,24 +1998,32 @@ with tab5:
 with tab6:
     st.markdown('<div class="section-header">Financial Statements</div>', unsafe_allow_html=True)
     income, balance, cashflow = fetch_financials(selected_ticker)
+    
+    # Get currency for formatting
+    currency = info.get("currency", "USD")
+    
+    # Format financials dataframes
+    income_formatted = format_financials_df(income, currency)
+    balance_formatted = format_financials_df(balance, currency)
+    cashflow_formatted = format_financials_df(cashflow, currency)
 
     fin_tab1, fin_tab2, fin_tab3 = st.tabs(["Income Statement", "Balance Sheet", "Cash Flow"])
 
     with fin_tab1:
-        if not income.empty:
-            st.dataframe(income, width="stretch", height=450)
+        if not income_formatted.empty:
+            st.dataframe(income_formatted, width="stretch", height=450)
         else:
             st.info("Income statement data not available.")
 
     with fin_tab2:
-        if not balance.empty:
-            st.dataframe(balance, width="stretch", height=450)
+        if not balance_formatted.empty:
+            st.dataframe(balance_formatted, width="stretch", height=450)
         else:
             st.info("Balance sheet data not available.")
 
     with fin_tab3:
-        if not cashflow.empty:
-            st.dataframe(cashflow, width="stretch", height=450)
+        if not cashflow_formatted.empty:
+            st.dataframe(cashflow_formatted, width="stretch", height=450)
         else:
             st.info("Cash flow data not available.")
 
