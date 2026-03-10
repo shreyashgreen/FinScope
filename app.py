@@ -1871,6 +1871,46 @@ with tab3:
                         <div class="metric-value" style="color: {color};">{outperformance:.2f}%</div>
                     </div>
                     """, unsafe_allow_html=True)
+                
+                # Additional price metrics with currency formatting
+                stock_current_price = stock_hist['Close'].iloc[-1]
+                index_current_price = index_hist['Close'].iloc[-1]
+                stock_start_price = stock_hist['Close'].iloc[0]
+                index_start_price = index_hist['Close'].iloc[0]
+                
+                st.markdown("#### Price Levels")
+                price_col1, price_col2, price_col3, price_col4 = st.columns(4)
+                with price_col1:
+                    st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-label">{selected_ticker} Current</div>
+                        <div class="metric-value">{format_currency(stock_current_price, currency)}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with price_col2:
+                    st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-label">{selected_ticker} 1Y Start</div>
+                        <div class="metric-value">{format_currency(stock_start_price, currency)}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with price_col3:
+                    st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-label">{index_name} Current</div>
+                        <div class="metric-value">{format_currency(index_current_price, currency)}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with price_col4:
+                    st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-label">{index_name} 1Y Start</div>
+                        <div class="metric-value">{format_currency(index_start_price, currency)}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
             else:
                 st.warning("Could not fetch historical data for comparison")
         except Exception as e:
