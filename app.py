@@ -404,21 +404,28 @@ INTERVAL_MAP = {
 @st.cache_data(ttl=3600)
 def search_ticker(query: str):
     """Search for tickers based on a company name query."""
-    try:
-        search = yf.Search(query, max_results=8)
-        results = []
-        for res in search.quotes:
-            if res.get('quoteType') in ('EQUITY', 'ETF', 'MUTUALFUND', 'INDEX', 'CRYPTOCURRENCY'):
-                name = res.get('shortname') or res.get('longname') or res.get('symbol')
-                results.append({
-                    "symbol": res['symbol'],
-                    "name": name,
-                    "type": res.get('quoteType'),
-                    "exchange": res.get('exchDisp', 'N/A')
-                })
-        return results
-    except Exception:
-        return []
+    import time
+    
+    for attempt in range(3):  # Retry up to 3 times
+        try:
+            search = yf.Search(query, max_results=8)
+            results = []
+            for res in search.quotes:
+                if res.get('quoteType') in ('EQUITY', 'ETF', 'MUTUALFUND', 'INDEX', 'CRYPTOCURRENCY'):
+                    name = res.get('shortname') or res.get('longname') or res.get('symbol')
+                    results.append({
+                        "symbol": res['symbol'],
+                        "name": name,
+                        "type": res.get('quoteType'),
+                        "exchange": res.get('exchDisp', 'N/A')
+                    })
+            return results
+        except Exception as e:
+            if attempt < 2:  # Don't wait on last attempt
+                time.sleep(1)  # Wait 1 second before retry
+            print(f"Search attempt {attempt + 1} failed for '{query}': {str(e)}")
+    
+    return []  # Return empty list if all attempts fail
 
 # Domain/Industry mapping for better peer classification
 INDUSTRY_DOMAIN_MAP = {
@@ -598,19 +605,47 @@ def fetch_peer_data(tickers: list):
 
 def fetch_stock_data(ticker: str):
     """Fetch comprehensive stock data from yfinance."""
-    stock = yf.Ticker(ticker)
-    info = {}
     try:
+        stock = yf.Ticker(ticker)
         info = stock.info
-        if not info or 'longName' not in info:
-            # Fallback for missing info
-            hist = stock.history(period="1d")
-            if not hist.empty:
-                info['currentPrice'] = hist['Close'].iloc[-1]
-                info['longName'] = ticker
-    except Exception:
-        pass
-    return info
+        
+        # If we got some data, return it
+        if info and len(info) > 0:
+            return info
+        
+        # Fallback: try to get basic data from history
+        print(f"Info fetch failed for {ticker}, trying history fallback")
+        hist = stock.history(period="1d")
+        if not hist.empty:
+            current_price = hist['Close'].iloc[-1]
+            info = {
+                'currentPrice': current_price,
+                'regularMarketPrice': current_price,
+                'previousClose': current_price,
+                'longName': ticker,
+                'symbol': ticker,
+                'currency': 'USD',
+            }
+            return info
+        
+        # Last resort: return minimal data
+        print(f"All fetch methods failed for {ticker}")
+        return {
+            'symbol': ticker,
+            'longName': ticker,
+            'currentPrice': None,
+            'currency': 'USD',
+        }
+        
+    except Exception as e:
+        print(f"Error fetching data for {ticker}: {str(e)}")
+        # Return minimal data on error
+        return {
+            'symbol': ticker,
+            'longName': ticker,
+            'currentPrice': None,
+            'currency': 'USD',
+        }
 
 
 @st.cache_data(ttl=120)
@@ -1101,13 +1136,33 @@ with st.sidebar:
         if results:
             st.session_state.search_results = results
         else:
-            st.sidebar.warning("No matches found. Try a different name.")
+            st.session_state.search_results = None
+            st.sidebar.warning("Search temporarily unavailable. You can enter a ticker symbol directly below.")
     
-    if 'search_results' in st.session_state and search_query:
+    if 'search_results' in st.session_state and st.session_state.search_results and search_query:
         options = {f"{r['name']} ({r['symbol']}) - {r['exchange']}": r['symbol'] for r in st.session_state.search_results}
         selected_option = st.selectbox("Select Result", options.keys(), index=0)
         if selected_option:
             st.session_state.selected_ticker = options[selected_option]
+
+    # Manual ticker input fallback
+    st.markdown("")
+    manual_ticker = st.text_input("🎯 Or enter ticker symbol directly", 
+                                 placeholder="e.g. AAPL, RELIANCE.NS, TSLA...",
+                                 help="Enter a stock ticker symbol directly if search is unavailable")
+    if manual_ticker and manual_ticker != st.session_state.get('manual_ticker', ''):
+        st.session_state.manual_ticker = manual_ticker
+        # Validate the ticker exists
+        try:
+            test_stock = yf.Ticker(manual_ticker.upper())
+            test_info = test_stock.info
+            if test_info and ('longName' in test_info or 'shortName' in test_info):
+                st.session_state.selected_ticker = manual_ticker.upper()
+                st.sidebar.success(f"✅ Selected: {manual_ticker.upper()}")
+            else:
+                st.sidebar.error("❌ Invalid ticker symbol. Please try again.")
+        except Exception:
+            st.sidebar.error("❌ Invalid ticker symbol. Please try again.")
 
     st.markdown("")
     quick_pick = st.selectbox("⚡ Quick Pick", [""] + POPULAR_STOCKS, 
@@ -1182,8 +1237,20 @@ with st.spinner(f"Loading data for **{selected_ticker}**..."):
     info = fetch_stock_data(selected_ticker)
     stock = yf.Ticker(selected_ticker)
 
-if not info:
-    st.error(f"⚠️ Could not fetch data for **{selected_ticker}**. Please verify the ticker symbol and try again.")
+if not info or ('currentPrice' not in info and 'regularMarketPrice' not in info and info.get('currentPrice') is None):
+    st.error(f"⚠️ Unable to fetch data for **{selected_ticker}**. This might be due to network issues or an invalid ticker.")
+    st.info("💡 **Suggestions:**\n- Try a different ticker symbol\n- Check your internet connection\n- Use the manual ticker input above\n- Select from Quick Pick options")
+    
+    # Show current selected ticker and allow changing it
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("🔄 Try Again", use_container_width=True):
+            st.rerun()
+    with col2:
+        if st.button("📋 Use Different Ticker", use_container_width=True):
+            st.session_state.selected_ticker = "AAPL"  # Reset to default
+            st.rerun()
+    
     st.stop()
 
 # ── Company header

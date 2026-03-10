@@ -30,6 +30,12 @@ The app is already deployed and live at:
 https://finscope.streamlit.app
 ```
 
+**Recent Updates (v2.1)**:
+- ✅ Enhanced error handling for cloud environments
+- ✅ Manual ticker input fallback when search fails
+- ✅ Improved network resilience and retry logic
+- ✅ Better mobile responsiveness
+
 No setup needed! Just open the URL on any device.
 
 ### Option 2: Local Development
