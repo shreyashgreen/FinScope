@@ -806,6 +806,19 @@ def analyze_sentiment(text: str):
         return 'neutral'
 
 
+def format_currency(value, currency="USD"):
+    """Format currency values with M, B, K suffixes."""
+    if pd.notnull(value) and value != 0:
+        if abs(value) >= 1e9:
+            return f"${value/1e9:.2f}B"
+        elif abs(value) >= 1e6:
+            return f"${value/1e6:.2f}M"
+        elif abs(value) >= 1e3:
+            return f"${value/1e3:.2f}K"
+        else:
+            return f"${value:,.2f}"
+    return "N/A"
+
 def categorize_news(title: str, summary: str = ""):
     """Categorize news into topics."""
     text = (title + " " + summary).lower()
@@ -1321,11 +1334,11 @@ st.markdown("")
 # ── Key Metrics Strip
 metrics_cols = st.columns(6)
 metric_items = [
-    ("Market Cap", f"{currency} {info.get('marketCap', 0)/1e9:.2f}B" if info.get('marketCap') else "N/A"),
+    ("Market Cap", format_currency(info.get('marketCap', 0))),
     ("P/E Ratio", f"{info.get('trailingPE', 0):.2f}" if info.get('trailingPE') else "N/A"),
-    ("EPS", f"{currency} {info.get('trailingEps', 0):.2f}" if info.get('trailingEps') else "N/A"),
-    ("52W High", f"{currency} {info.get('fiftyTwoWeekHigh', 0):,.2f}" if info.get('fiftyTwoWeekHigh') else "N/A"),
-    ("52W Low", f"{currency} {info.get('fiftyTwoWeekLow', 0):,.2f}" if info.get('fiftyTwoWeekLow') else "N/A"),
+    ("EPS", f"${info.get('trailingEps', 0):.2f}" if info.get('trailingEps') else "N/A"),
+    ("52W High", f"${info.get('fiftyTwoWeekHigh', 0):,.2f}" if info.get('fiftyTwoWeekHigh') else "N/A"),
+    ("52W Low", f"${info.get('fiftyTwoWeekLow', 0):,.2f}" if info.get('fiftyTwoWeekLow') else "N/A"),
     ("Volume", f"{info.get('volume', 0):,}" if info.get('volume') else "N/A"),
 ]
 for col, (label, value) in zip(metrics_cols, metric_items):
@@ -1392,7 +1405,7 @@ st.markdown("")
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📈 Price Charts",
     "🎯 Analyst Recommendations",
-    "� Stock Analysis",
+    " Stock Analysis",
     "⚖️ Peer Comparison",
     "📜 Historical Actions",
     "📊 Financials",
@@ -1744,17 +1757,12 @@ with tab4:
         comparison_tickers = []
 
     if comparison_tickers:
-        # Add native benchmark index to comparison
-        native_benchmark = fetch_native_benchmark(stock1.upper())
-        if native_benchmark != 'N/A':
-            comparison_tickers.append(native_benchmark)
-
-        with st.spinner(f"Comparing {stock1.upper()} with {stock2.upper()} and benchmark..."):
+        with st.spinner(f"Comparing {stock1.upper()} with {stock2.upper()}..."):
             peer_df = fetch_peer_data(comparison_tickers)
 
         if not peer_df.empty:
             # Peer overview
-            st.markdown("#### Stock Overview with Benchmark")
+            st.markdown("#### Stock Overview")
             overview_cols = st.columns(len(comparison_tickers))
             for i, (_, row) in enumerate(peer_df.iterrows()):
                 if i < len(overview_cols):
@@ -1771,7 +1779,7 @@ with tab4:
                                 {row['Name'][:20]}{'...' if len(str(row['Name'])) > 20 else ''}
                             </div>
                             <div style="font-size: 1rem; font-weight: 600; color: #ffffff;">
-                                {row['Currency']} {row['Price']:,.2f}
+                                ${row['Price']:,.2f}
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -1782,15 +1790,24 @@ with tab4:
             st.markdown("#### Key Metrics Comparison")
             formatted_df = peer_df.copy()
 
+            # Helper function for currency formatting
+            def format_currency(value, currency="USD"):
+                if pd.notnull(value) and value > 0:
+                    if value >= 1e9:
+                        return f"${value/1e9:.2f}B"
+                    elif value >= 1e6:
+                        return f"${value/1e6:.2f}M"
+                    elif value >= 1e3:
+                        return f"${value/1e3:.2f}K"
+                    else:
+                        return f"${value:,.2f}"
+                return "N/A"
+
             # Format market cap
-            formatted_df["Market Cap"] = formatted_df["Market Cap"].apply(
-                lambda x: f"{x/1e9:,.2f}B" if pd.notnull(x) and x > 0 else "N/A"
-            )
+            formatted_df["Market Cap"] = formatted_df["Market Cap"].apply(format_currency)
 
             # Format revenue
-            formatted_df["Revenue"] = formatted_df["Revenue"].apply(
-                lambda x: f"{x/1e9:,.2f}B" if pd.notnull(x) and x > 0 else "N/A"
-            )
+            formatted_df["Revenue"] = formatted_df["Revenue"].apply(format_currency)
 
             # Format dividend yield
             formatted_df["Div Yield"] = formatted_df["Div Yield"].apply(
@@ -1802,7 +1819,7 @@ with tab4:
                 lambda x: f"{x:.2f}" if pd.notnull(x) and x > 0 else "N/A"
             )
 
-            # Highlight first stock
+            # Highlight selected stock
             def highlight_selected(val):
                 if val == stock1.upper():
                     return 'background-color: rgba(102,126,234,0.2)'
