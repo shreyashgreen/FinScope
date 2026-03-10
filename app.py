@@ -423,7 +423,7 @@ def search_ticker(query: str):
         except Exception as e:
             if attempt < 2:  # Don't wait on last attempt
                 time.sleep(1)  # Wait 1 second before retry
-            print(f"Search attempt {attempt + 1} failed for '{query}': {str(e)}")
+            continue
     
     return []  # Return empty list if all attempts fail
 
@@ -614,7 +614,6 @@ def fetch_stock_data(ticker: str):
             return info
         
         # Fallback: try to get basic data from history
-        print(f"Info fetch failed for {ticker}, trying history fallback")
         hist = stock.history(period="1d")
         if not hist.empty:
             current_price = hist['Close'].iloc[-1]
@@ -629,7 +628,6 @@ def fetch_stock_data(ticker: str):
             return info
         
         # Last resort: return minimal data
-        print(f"All fetch methods failed for {ticker}")
         return {
             'symbol': ticker,
             'longName': ticker,
@@ -638,7 +636,6 @@ def fetch_stock_data(ticker: str):
         }
         
     except Exception as e:
-        print(f"Error fetching data for {ticker}: {str(e)}")
         # Return minimal data on error
         return {
             'symbol': ticker,
