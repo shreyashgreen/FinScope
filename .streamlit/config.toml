@@ -1,0 +1,49 @@
+# Streamlit Configuration for FinScope
+# Optimized for cloud deployment and mobile devices
+
+[theme]
+primaryColor = "#667eea"
+backgroundColor = "#0f0c29"
+secondaryBackgroundColor = "#1a1a2e"
+textColor = "#ffffff"
+font = "sans serif"
+
+[client]
+showErrorDetails = false
+toolbarMode = "minimal"
+
+[logger]
+level = "warning"
+
+[server]
+port = 8501
+headless = true
+runOnSave = true
+baseUrlPath = ""
+maxUploadSize = 10
+enableCORS = true
+enableXsrfProtection = true
+
+# Mobile optimization
+[browser]
+gatherUsageStats = false
+
+# Performance
+[client.caching]
+cacheControlHeader = "public, max-age=3600"
+
+# For Streamlit Cloud
+[logger]
+level = "warning"
+
+[serverConfig]
+maxUploadSize = 10
+runOnSave = true
+
+# Typography & Responsive Design
+[theme]
+font = "sans serif"
+
+# Disable streamlit branding on mobile-friendly deployments
+# The CSS handles this with customization
+

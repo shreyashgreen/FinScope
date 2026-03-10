@@ -12,7 +12,13 @@ import base64
 import json
 import tempfile
 import os
-import json
+import requests
+from textblob import TextBlob
+import re
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # ─────────────────────────────────────────────
 # PAGE CONFIG & THEME
@@ -198,6 +204,148 @@ st.markdown("""
         transform: translateY(-1px) !important;
         box-shadow: 0 6px 20px rgba(102,126,234,0.4) !important;
     }
+
+    /* ────────────────────────────────────────────────────────────── */
+    /* MOBILE RESPONSIVE DESIGN                                       */
+    /* ────────────────────────────────────────────────────────────── */
+    
+    @media (max-width: 768px) {
+        /* Reduce padding on small screens */
+        .stApp {
+            padding: 0;
+        }
+        
+        .main-header {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 12px;
+        }
+        
+        .main-header h1 {
+            font-size: 1.5rem;
+        }
+        
+        .main-header p {
+            font-size: 0.8rem;
+        }
+        
+        /* Stack columns on mobile */
+        .stColumn {
+            margin-bottom: 0.5rem;
+        }
+        
+        /* Optimize metric cards for mobile */
+        .metric-card {
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .metric-label {
+            font-size: 0.65rem;
+        }
+        
+        .metric-value {
+            font-size: 1.2rem;
+        }
+        
+        /* Section headers */
+        .section-header {
+            font-size: 1rem;
+            margin: 1rem 0 0.6rem 0;
+        }
+        
+        /* Tab styling for mobile */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0;
+            padding: 2px;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            padding: 8px 12px;
+            font-size: 0.75rem;
+            margin-right: 2px;
+        }
+        
+        /* Adjust selectbox */
+        .stSelectbox, .stMultiSelect {
+            margin-bottom: 0.5rem;
+        }
+        
+        /* Make buttons full width on mobile */
+        button {
+            min-height: 44px !important; /* Touch-friendly size */
+        }
+        
+        /* Info box adjustments */
+        .info-box {
+            padding: 0.8rem;
+            margin: 0.3rem 0;
+        }
+        
+        /* Index cards */
+        .index-card {
+            padding: 0.6rem 0.8rem;
+            margin-bottom: 0.4rem;
+        }
+        
+        /* Hide sidebar on very small screens or make it overlay */
+        section[data-testid="stSidebar"] {
+            width: 80% !important;
+        }
+        
+        /* Improve dataframe visibility on mobile */
+        [data-testid="stDataFrame"] {
+            font-size: 0.85rem;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        /* Extra small phone optimization */
+        .main-header {
+            padding: 0.8rem;
+            margin-bottom: 0.8rem;
+        }
+        
+        .main-header h1 {
+            font-size: 1.2rem;
+        }
+        
+        .section-header {
+            font-size: 0.95rem;
+        }
+        
+        .metric-card {
+            padding: 0.8rem;
+        }
+        
+        .metric-value {
+            font-size: 1rem;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            padding: 6px 10px;
+            font-size: 0.7rem;
+        }
+        
+        /* Single column layout hint */
+        .stColumn {
+            width: 100% !important;
+        }
+    }
+    
+    /* Touch-friendly elements */
+    @media (hover: none) and (pointer: coarse) {
+        /* Mobile device detected */
+        button, a, .stButton > button {
+            min-height: 48px !important;
+            font-size: 1rem !important;
+        }
+        
+        input, select, textarea {
+            min-height: 44px !important;
+            font-size: 16px !important; /* Prevents zoom on input focus */
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -272,60 +420,182 @@ def search_ticker(query: str):
     except Exception:
         return []
 
-def get_industry_peers(industry: str, sector: str):
-    """Get a list of top 3 peer tickers for a given industry/sector."""
-    # Mapping of common industries to global leaders (tickers)
-    peer_map = {
-        "Consumer Electronics": ["MSFT", "GOOGL", "NVDA"],
-        "Software—Infrastructure": ["AMZN", "GOOGL", "ORCL"],
-        "Internet Content & Information": ["META", "GOOGL", "SNAP"],
-        "Semiconductors": ["NVDA", "TSM", "AMD"],
-        "Electric Vehicles": ["TSLA", "BYDDF", "NIO"],
-        "Auto Manufacturers": ["TM", "TSLA", "VOW3.DE"],
-        "Banks—Diversified": ["JPM", "BAC", "HSBC"],
-        "Retailers": ["WMT", "AMZN", "COST"],
-        "Energy": ["XOM", "CVX", "SHEL.L"],
-        "Beverages—Non-Alcoholic": ["KO", "PEP", "MNST"],
-        "Entertainment": ["DIS", "NFLX", "WBD"]
-    }
+# Domain/Industry mapping for better peer classification
+INDUSTRY_DOMAIN_MAP = {
+    # Technology
+    "Consumer Electronics": {"domain": "Technology", "peers": ["MSFT", "GOOGL", "NVDA", "AAPL"]},
+    "Software—Infrastructure": {"domain": "Technology", "peers": ["AMZN", "GOOGL", "ORCL", "MSFT"]},
+    "Semiconductors": {"domain": "Technology", "peers": ["NVDA", "AMD", "INTC", "TSM"]},
+    "Internet Content & Information": {"domain": "Technology", "peers": ["META", "GOOGL", "NFLX", "SNAP"]},
+    "Software—Application": {"domain": "Technology", "peers": ["CRM", "ADBE", "INTU", "MSFT"]},
     
-    peers = peer_map.get(industry)
-    if not peers:
-        # Fallback to search-based discovery for niche industries
+    # Finance
+    "Banks—Diversified": {"domain": "Finance", "peers": ["JPM", "BAC", "WFC", "HSBC"]},
+    "Insurance": {"domain": "Finance", "peers": ["BRK-B", "AIG", "PRU", "MET"]},
+    "Financial Data & Services": {"domain": "Finance", "peers": ["V", "MA", "PYPL", "ADP"]},
+    
+    # Manufacturing & Industrial
+    "Auto Manufacturers": {"domain": "Manufacturing", "peers": ["TM", "TSLA", "VWAGY", "BMW"]},
+    "Electric Vehicles": {"domain": "Manufacturing", "peers": ["TSLA", "NIO", "XPEV", "TM"]},
+    "Appliance & Machinery": {"domain": "Manufacturing", "peers": ["CAT", "CNH", "DE", "FAST"]},
+    
+    # Consumer
+    "Retailers": {"domain": "Consumer", "peers": ["WMT", "AMZN", "COST", "TGT"]},
+    "Specialty Retail": {"domain": "Consumer", "peers": ["NKE", "LULU", "ULTA", "HD"]},
+    "Apparel Manufacturing": {"domain": "Consumer", "peers": ["NKE", "VFC", "PVH", "CAL"]},
+    
+    # Energy & Materials
+    "Energy": {"domain": "Energy", "peers": ["XOM", "CVX", "COP", "SHELL"]},
+    "Chemicals": {"domain": "Materials", "peers": ["LYB", "DOW", "EMN", "APD"]},
+    "Metals & Mining": {"domain": "Materials", "peers": ["VALE", "RIO", "GLEN", "SCCO"]},
+    
+    # Healthcare
+    "Pharmaceuticals": {"domain": "Healthcare", "peers": ["PFE", "JNJ", "ABBV", "MRK"]},
+    "Medical Devices": {"domain": "Healthcare", "peers": ["JNJ", "ISRG", "TMO", "MDT"]},
+    "Biotechnology": {"domain": "Healthcare", "peers": ["AMGN", "BIIB", "GILD", "VRTX"]},
+    
+    # Consumer Goods
+    "Beverages—Non-Alcoholic": {"domain": "Consumer Goods", "peers": ["KO", "PEP", "MNST", "KDP"]},
+    "Food Distribution": {"domain": "Consumer Goods", "peers": ["SYY", "GPS", "CORE", "UNFI"]},
+    "Household & Personal Care": {"domain": "Consumer Goods", "peers": ["PG", "CL", "EL", "UL"]},
+    
+    # Entertainment & Media
+    "Entertainment": {"domain": "Media & Entertainment", "peers": ["DIS", "NFLX", "WBD", "PARA"]},
+    "Broadcasting": {"domain": "Media & Entertainment", "peers": ["IMAX", "CMCSA", "CHTR", "FOX"]},
+}
+
+def get_industry_peers(industry: str, sector: str):
+    """Get a list of peer tickers for a given industry/sector with domain classification."""
+    if industry in INDUSTRY_DOMAIN_MAP:
+        return INDUSTRY_DOMAIN_MAP[industry]["peers"]
+    
+    # Fallback to search-based discovery for niche industries
+    try:
+        search = yf.Search(industry, max_results=5)
+        peers = [q['symbol'] for q in search.quotes if q.get('quoteType') == 'EQUITY'][:3]
+        return peers if peers else ["AAPL", "MSFT", "GOOGL"]
+    except Exception:
+        return ["AAPL", "MSFT", "GOOGL"]
+
+
+@st.cache_data(ttl=1800)  # Cache for 30 minutes
+def get_intelligent_peers(ticker: str, industry: str, sector: str, market_cap: float = None, country: str = None):
+    """Intelligently find global peer companies based on multiple criteria and domain classification."""
+    peers_with_domain = []
+
+    # 1. Get peers from industry domain map
+    domain_info = None
+    for ind, info in INDUSTRY_DOMAIN_MAP.items():
+        if ind.lower() == industry.lower():
+            domain_info = info
+            break
+    
+    if domain_info:
+        base_peers = domain_info["peers"]
+        domain = domain_info["domain"]
+        for peer in base_peers:
+            if peer != ticker:
+                peers_with_domain.append((peer, domain, 1.0))
+    else:
+        domain = sector or "Miscellaneous"
         try:
             search = yf.Search(industry, max_results=5)
-            peers = [q['symbol'] for q in search.quotes if q.get('quoteType') == 'EQUITY'][:3]
+            for q in search.quotes:
+                if q.get('quoteType') == 'EQUITY' and q['symbol'] != ticker:
+                    peers_with_domain.append((q['symbol'], domain, 0.8))
         except Exception:
-            peers = ["AAPL", "MSFT", "GOOGL"] # Final fallback
-            
-    return peers
+            pass
 
-@st.cache_data(ttl=300)
+    # 2. Find additional peers by market cap similarity and geography
+    try:
+        company_info = yf.Ticker(ticker).info
+        company_cap = company_info.get('marketCap', 0)
+        company_country = company_info.get('country', 'US')
+
+        search_terms = [industry, sector]
+        for term in search_terms[:2]:
+            try:
+                search_results = yf.Search(term, max_results=8)
+                for result in search_results.quotes:
+                    symbol = result.get('symbol')
+                    if (result.get('quoteType') == 'EQUITY' and
+                        symbol != ticker and
+                        symbol not in [p[0] for p in peers_with_domain]):
+                        
+                        try:
+                            peer_info = yf.Ticker(symbol).info
+                            peer_cap = peer_info.get('marketCap', 0)
+                            peer_country = peer_info.get('country', 'US')
+                            
+                            if company_cap > 0 and peer_cap > 0 and 0.1 <= (peer_cap / company_cap) <= 10:
+                                peer_domain = peer_info.get('sector', domain) or domain
+                                similarity_score = 1 / max(abs(1 - (peer_cap / company_cap)), 0.1)
+                                if peer_country == company_country:
+                                    similarity_score *= 1.3
+                                peers_with_domain.append((symbol, peer_domain, similarity_score))
+                        except Exception:
+                            continue
+            except Exception:
+                continue
+
+    except Exception:
+        pass
+
+    # 3. Remove duplicates, sort by score, group by domain
+    seen = set()
+    unique_peers = []
+    for peer, domain, score in peers_with_domain:
+        if peer not in seen:
+            unique_peers.append((peer, domain, score))
+            seen.add(peer)
+    
+    # Sort by domain first (for visualization), then by score
+    unique_peers.sort(key=lambda x: (-x[2], x[1]))
+    
+    # Return just the symbols (up to 6 peers)
+    return [p[0] for p in unique_peers[:6]]
+@st.cache_data(ttl=3600)
 def fetch_peer_data(tickers: list):
-    """Fetch key comparison metrics for a list of tickers."""
-    data = []
-    for t in tickers:
+    """Fetch peer comparison data from yfinance for multiple tickers, sorted by domain."""
+    peer_data = []
+    
+    for ticker in tickers:
         try:
-            s = yf.Ticker(t)
-            i = s.info
-            data.append({
-                "Ticker": t,
-                "Name": i.get("shortName") or i.get("longName") or t,
-                "Price": i.get("currentPrice") or i.get("regularMarketPrice"),
-                "Market Cap": i.get("marketCap"),
-                "P/E Ratio": i.get("trailingPE"),
-                "Div Yield": i.get("dividendYield"),
-                "Revenue": i.get("totalRevenue"),
-                "Currency": i.get("currency", "USD")
+            stock = yf.Ticker(ticker)
+            info = stock.info
+            
+            peer_data.append({
+                'Ticker': ticker,
+                'Name': info.get('longName', info.get('shortName', ticker)),
+                'Currency': info.get('currency', 'USD'),
+                'Price': info.get('currentPrice', 0),
+                'Market Cap': info.get('marketCap', 0),
+                'Revenue': info.get('totalRevenue', 0),
+                'Div Yield': info.get('dividendYield', 0),
+                'P/E Ratio': info.get('trailingPE', 0),
+                'Domain': info.get('sector', 'Miscellaneous'),
+                'Industry': info.get('industry', 'N/A'),
             })
         except Exception:
-            continue
-    return pd.DataFrame(data)
+            # Add placeholder for failed tickers
+            peer_data.append({
+                'Ticker': ticker,
+                'Name': ticker,
+                'Currency': 'USD',
+                'Price': 0,
+                'Market Cap': 0,
+                'Revenue': 0,
+                'Div Yield': 0,
+                'P/E Ratio': 0,
+                'Domain': 'N/A',
+                'Industry': 'N/A',
+            })
+    
+    df = pd.DataFrame(peer_data)
+    # Sort by Domain first, then by Market Cap descending
+    df = df.sort_values(['Domain', 'Market Cap'], ascending=[True, False]).reset_index(drop=True)
+    return df
 
-# ─────────────────────────────────────────────
-# CACHING (Stock Data)
-# ─────────────────────────────────────────────
-@st.cache_data(ttl=300)
 def fetch_stock_data(ticker: str):
     """Fetch comprehensive stock data from yfinance."""
     stock = yf.Ticker(ticker)
@@ -413,6 +683,92 @@ def fetch_news(ticker: str):
         return stock.news
     except Exception:
         return []
+
+
+@st.cache_data(ttl=600)  # Cache for 10 minutes
+def fetch_enhanced_news(ticker: str, company_name: str = None):
+    """Fetch comprehensive news exclusively from yfinance with sentiment analysis and categorization."""
+    all_news = []
+
+    # Fetch news from Yahoo Finance exclusively
+    try:
+        stock = yf.Ticker(ticker)
+        yf_news = stock.news
+        if yf_news:
+            for item in yf_news:
+                # Extract and normalize news data from yfinance
+                title = item.get('title', '')
+                summary = item.get('summary', '')
+                
+                if not title:  # Skip items without titles
+                    continue
+                
+                news_item = {
+                    'title': title,
+                    'summary': summary,
+                    'link': item.get('link', ''),
+                    'providerPublishTime': item.get('providerPublishTime', int(datetime.now().timestamp())),
+                    'publisher': item.get('publisher', 'Yahoo Finance'),
+                    'source': 'Yahoo Finance',
+                    'thumbnail': item.get('thumbnail'),
+                    'sentiment': analyze_sentiment(title + ' ' + summary),
+                    'category': categorize_news(title, summary),
+                }
+                all_news.append(news_item)
+    except Exception:
+        pass
+
+    # Sort by publish time and remove duplicates
+    all_news = sorted(all_news, key=lambda x: x.get('providerPublishTime', 0), reverse=True)
+    seen_titles = set()
+    unique_news = []
+    for item in all_news:
+        title = item.get('title', '').lower().strip()
+        if title not in seen_titles and len(title) > 10:
+            seen_titles.add(title)
+            unique_news.append(item)
+
+    return unique_news[:20]  # Return top 20 unique news items
+
+
+def analyze_sentiment(text: str):
+    """Analyze sentiment of news text."""
+    try:
+        if not text or len(text.strip()) < 10:
+            return 'neutral'
+
+        blob = TextBlob(text)
+        polarity = blob.sentiment.polarity
+
+        if polarity > 0.1:
+            return 'positive'
+        elif polarity < -0.1:
+            return 'negative'
+        else:
+            return 'neutral'
+    except Exception:
+        return 'neutral'
+
+
+def categorize_news(title: str, summary: str = ""):
+    """Categorize news into topics."""
+    text = (title + " " + summary).lower()
+
+    categories = {
+        'earnings': ['earnings', 'revenue', 'profit', 'loss', 'quarter', 'annual', 'financial results'],
+        'mergers': ['merger', 'acquisition', 'buyout', 'takeover', 'deal'],
+        'regulatory': ['sec', 'fda', 'regulation', 'compliance', 'lawsuit', 'legal'],
+        'product': ['product', 'launch', 'release', 'update', 'technology', 'innovation'],
+        'market': ['market', 'trading', 'volatility', 'bull', 'bear', 'crash', 'rally'],
+        'executive': ['ceo', 'executive', 'board', 'management', 'leadership'],
+        'economic': ['economy', 'fed', 'interest rate', 'inflation', 'recession']
+    }
+
+    for category, keywords in categories.items():
+        if any(keyword in text for keyword in keywords):
+            return category.title()
+
+    return 'General'
 
 
 # ─────────────────────────────────────────────
@@ -1125,93 +1481,268 @@ with tab2:
 
 # ── TAB 3: NEWS
 with tab3:
-    st.markdown('<div class="section-header">Latest Market News</div>', unsafe_allow_html=True)
-    news_items = fetch_news(selected_ticker)
-    if news_items:
-        for idx, n in enumerate(news_items[:12]):
+    st.markdown('<div class="section-header">Latest Market News & Analysis</div>', unsafe_allow_html=True)
+
+    # Note about yfinance news source
+    st.info("📰 **Real-Time News:** News is fetched from Yahoo Finance providing live market insights and company updates sorted by domain expertise.")
+
+    # News controls
+    news_col1, news_col2, news_col3 = st.columns([2, 1, 1])
+
+    # News source options (yfinance only)
+    available_sources = ["All Sources", "Yahoo Finance"]
+
+    with news_col1:
+        news_source = st.selectbox("News Source", available_sources)
+    with news_col2:
+        sentiment_filter = st.selectbox("Sentiment", ["All", "Positive", "Negative", "Neutral"])
+    with news_col3:
+        category_filter = st.selectbox("Category", ["All", "Earnings", "Mergers", "Regulatory", "Product", "Market", "Executive", "Economic", "General"])
+
+    # Fetch enhanced news
+    company_name = info.get("longName", "").split()[0] if info.get("longName") else None
+    news_items = fetch_enhanced_news(selected_ticker, company_name)
+
+    # Filter news
+    filtered_news = []
+    for item in news_items:
+        # Source filter
+        if news_source != "All Sources" and item.get('source') != news_source:
+            continue
+
+        # Sentiment filter
+        if sentiment_filter != "All" and item.get('sentiment') != sentiment_filter.lower():
+            continue
+
+        # Category filter
+        if category_filter != "All":
+            item_category = categorize_news(item.get('title', ''), item.get('summary', ''))
+            if item_category != category_filter:
+                continue
+
+        filtered_news.append(item)
+
+    if filtered_news:
+        # News statistics
+        sentiment_counts = {}
+        category_counts = {}
+        for item in filtered_news:
+            sent = item.get('sentiment', 'neutral')
+            sentiment_counts[sent] = sentiment_counts.get(sent, 0) + 1
+
+            cat = categorize_news(item.get('title', ''), item.get('summary', ''))
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+
+        stat_col1, stat_col2, stat_col3 = st.columns(3)
+        with stat_col1:
+            total_news = len(filtered_news)
+            st.metric("Total Articles", total_news)
+        with stat_col2:
+            pos_pct = (sentiment_counts.get('positive', 0) / total_news * 100) if total_news > 0 else 0
+            st.metric("Positive Sentiment", f"{pos_pct:.1f}%")
+        with stat_col3:
+            top_cat = max(category_counts.items(), key=lambda x: x[1])[0] if category_counts else "N/A"
+            st.metric("Top Category", top_cat)
+
+        st.markdown("---")
+
+        # Display news items
+        for idx, n in enumerate(filtered_news[:15]):
             with st.container():
                 col_n1, col_n2 = st.columns([1, 4])
+
+                # Thumbnail
                 thumb = None
-                if "thumbnail" in n and "resolutions" in n["thumbnail"]:
+                if "thumbnail" in n and n["thumbnail"] and "resolutions" in n["thumbnail"]:
                     thumb = n["thumbnail"]["resolutions"][0]["url"]
-                
+                elif n.get('thumbnail') and isinstance(n['thumbnail'], dict):
+                    thumb = n['thumbnail'].get('url')
+
                 with col_n1:
                     if thumb:
-                        st.image(thumb, use_container_width=True)
+                        try:
+                            st.image(thumb, use_container_width=True)
+                        except:
+                            st.markdown("""
+                            <div style="background: rgba(255,255,255,0.05); aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                                <span style="font-size: 2rem; opacity: 0.3;">📰</span>
+                            </div>
+                            """, unsafe_allow_html=True)
                     else:
                         st.markdown("""
                         <div style="background: rgba(255,255,255,0.05); aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
                             <span style="font-size: 2rem; opacity: 0.3;">📰</span>
                         </div>
                         """, unsafe_allow_html=True)
-                
+
                 with col_n2:
-                    st.markdown(f"#### [{n.get('title')}]({n.get('link')})")
+                    # Title with sentiment indicator
+                    sentiment = n.get('sentiment', 'neutral')
+                    sentiment_emoji = {'positive': '🟢', 'negative': '🔴', 'neutral': '🟡'}.get(sentiment, '🟡')
+                    category = categorize_news(n.get('title', ''), n.get('summary', ''))
+
+                    st.markdown(f"#### {sentiment_emoji} [{n.get('title')}]({n.get('link', '#')})")
+
+                    # Metadata
                     pub_time = datetime.fromtimestamp(n.get('providerPublishTime', 0)).strftime('%Y-%m-%d %H:%M')
+                    source = n.get('source', 'Unknown')
+                    publisher = n.get('publisher', 'Unknown')
+
                     st.markdown(f"""
-                    <p style="color: rgba(255,255,255,0.4); font-size: 0.8rem; margin: 0;">
-                        <strong>{n.get('publisher', 'Unknown')}</strong> • {pub_time}
+                    <p style="color: rgba(255,255,255,0.4); font-size: 0.8rem; margin: 0.2rem 0;">
+                        <strong>{publisher}</strong> • {pub_time} • {source} • {category}
                     </p>
                     """, unsafe_allow_html=True)
-                
+
+                    # Summary
+                    summary = n.get('summary', '')
+                    if summary and len(summary) > 50:
+                        st.markdown(f"""
+                        <p style="color: rgba(255,255,255,0.7); font-size: 0.85rem; margin: 0.5rem 0; line-height: 1.4;">
+                            {summary[:200]}{'...' if len(summary) > 200 else ''}
+                        </p>
+                        """, unsafe_allow_html=True)
+
                 st.markdown('<div style="margin: 1.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);"></div>', unsafe_allow_html=True)
     else:
-        st.info(f"No recent news found for {selected_ticker}.")
+        st.info(f"No news found for {selected_ticker} matching your filters. Try adjusting the filters or check back later.")
 
 
 # ── TAB 4: PEER COMPARISON
 with tab4:
-    st.markdown('<div class="section-header">Industry Peer Comparison</div>', unsafe_allow_html=True)
-    
-    peers = get_industry_peers(industry, sector)
-    comparison_tickers = list(dict.fromkeys([selected_ticker] + peers))[:4] # Selected + Top 3 peers
-    
-    with st.spinner(f"Comparing {selected_ticker} with industry leaders..."):
+    st.markdown('<div class="section-header">Intelligent Global Peer Comparison</div>', unsafe_allow_html=True)
+
+    # Peer selection method
+    peer_method = st.radio("Peer Selection Method",
+                          ["Industry Leaders", "Intelligent Matching", "Custom Selection"],
+                          horizontal=True)
+
+    if peer_method == "Custom Selection":
+        custom_peers = st.multiselect("Select Peer Companies",
+                                     POPULAR_STOCKS + [t for t in GLOBAL_INDICES.keys() if t not in GLOBAL_INDICES],
+                                     default=[], max_selections=5)
+        comparison_tickers = [selected_ticker] + custom_peers
+    else:
+        # Get intelligent peers
+        market_cap = info.get('marketCap')
+        country = info.get('country')
+        if peer_method == "Intelligent Matching":
+            peers = get_intelligent_peers(selected_ticker, industry, sector, market_cap, country)
+        else:  # Industry Leaders
+            peers = get_industry_peers(industry, sector)
+
+        comparison_tickers = list(dict.fromkeys([selected_ticker] + peers))[:6]
+
+    with st.spinner(f"Comparing {selected_ticker} with {len(comparison_tickers)-1} peer companies..."):
         peer_df = fetch_peer_data(comparison_tickers)
-    
+
     if not peer_df.empty:
+        # Peer overview
+        st.markdown("#### Peer Company Overview")
+        overview_cols = st.columns(len(comparison_tickers))
+        for i, (_, row) in enumerate(peer_df.iterrows()):
+            if i < len(overview_cols):
+                with overview_cols[i]:
+                    is_selected = row['Ticker'] == selected_ticker
+                    border_style = "border: 2px solid #667eea;" if is_selected else "border: 1px solid rgba(255,255,255,0.1);"
+
+                    st.markdown(f"""
+                    <div style="background: rgba(255,255,255,0.03); {border_style} border-radius: 10px; padding: 1rem; text-align: center; margin-bottom: 0.5rem;">
+                        <div style="font-weight: 700; font-size: 1.1rem; color: {'#667eea' if is_selected else '#ffffff'};">
+                            {row['Ticker']}
+                        </div>
+                        <div style="font-size: 0.8rem; color: rgba(255,255,255,0.6); margin: 0.2rem 0;">
+                            {row['Name'][:20]}{'...' if len(str(row['Name'])) > 20 else ''}
+                        </div>
+                        <div style="font-size: 1rem; font-weight: 600; color: #ffffff;">
+                            {row['Currency']} {row['Price']:,.2f}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        st.markdown("---")
+
         # Comparison Table
         st.markdown("#### Key Metrics Comparison")
         formatted_df = peer_df.copy()
-        for col in ["Market Cap", "Revenue"]:
-            formatted_df[col] = formatted_df[col].apply(lambda x: f"{x/1e9:,.2f}B" if pd.notnull(x) else "N/A")
-        formatted_df["Div Yield"] = formatted_df["Div Yield"].apply(lambda x: f"{x*100:.2f}%" if pd.notnull(x) else "N/A")
-        formatted_df["P/E Ratio"] = formatted_df["P/E Ratio"].apply(lambda x: f"{x:.2f}" if pd.notnull(x) else "N/A")
-        
-        st.dataframe(formatted_df.drop(columns=["Currency"]), use_container_width=True)
-        
-        # Relative Performance Chart
-        st.markdown("#### 1-Year Relative Performance")
-        comp_hist = {}
-        for t in comparison_tickers:
-            h = fetch_history(t, "1y", "1d")
-            if not h.empty:
-                # Normalize to starting price (100)
-                comp_hist[t] = (h["Close"] / h["Close"].iloc[0]) * 100
-        
-        if comp_hist:
-            fig_perf = go.Figure()
-            for t, series in comp_hist.items():
-                fig_perf.add_trace(go.Scatter(
-                    x=series.index, y=series, mode="lines", name=t,
-                    line=dict(width=2 if t == selected_ticker else 1.5),
-                    opacity=1 if t == selected_ticker else 0.7
-                ))
-            
-            fig_perf.update_layout(
-                template="plotly_dark",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                height=450,
-                margin=dict(l=0, r=0, t=20, b=0),
-                yaxis_title="Normalized Price (Base 100)",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                xaxis=dict(gridcolor="rgba(255,255,255,0.04)"),
-                yaxis=dict(gridcolor="rgba(255,255,255,0.04)"),
-            )
-            st.plotly_chart(fig_perf, use_container_width=True)
+
+        # Format market cap
+        formatted_df["Market Cap"] = formatted_df["Market Cap"].apply(
+            lambda x: f"{x/1e9:,.2f}B" if pd.notnull(x) and x > 0 else "N/A"
+        )
+
+        # Format revenue
+        formatted_df["Revenue"] = formatted_df["Revenue"].apply(
+            lambda x: f"{x/1e9:,.2f}B" if pd.notnull(x) and x > 0 else "N/A"
+        )
+
+        # Format dividend yield
+        formatted_df["Div Yield"] = formatted_df["Div Yield"].apply(
+            lambda x: f"{x*100:.2f}%" if pd.notnull(x) and x > 0 else "N/A"
+        )
+
+        # Format P/E ratio
+        formatted_df["P/E Ratio"] = formatted_df["P/E Ratio"].apply(
+            lambda x: f"{x:.2f}" if pd.notnull(x) and x > 0 else "N/A"
+        )
+
+        # Highlight selected company
+        def highlight_selected(val):
+            if val == selected_ticker:
+                return 'background-color: rgba(102,126,234,0.2)'
+            return ''
+
+        styled_df = formatted_df.drop(columns=["Currency"]).style.applymap(
+            highlight_selected, subset=["Ticker"]
+        )
+
+        st.dataframe(styled_df, use_container_width=True)
+
+        # Performance comparison
+        st.markdown("#### Relative Performance Comparison")
+        perf_periods = st.multiselect("Compare Performance Over",
+                                     ["1 Month", "3 Months", "6 Months", "1 Year", "2 Years"],
+                                     default=["1 Year"], max_selections=3)
+
+        for period in perf_periods:
+            period_key = PERIOD_MAP[period]
+            interval_key = INTERVAL_MAP[period]
+
+            comp_hist = {}
+            for t in comparison_tickers:
+                h = fetch_history(t, period_key, interval_key)
+                if not h.empty and len(h) > 1:
+                    # Normalize to percentage change from start
+                    start_price = h["Close"].iloc[0]
+                    comp_hist[t] = ((h["Close"] - start_price) / start_price) * 100
+
+            if comp_hist:
+                fig_perf = go.Figure()
+                for t, series in comp_hist.items():
+                    is_selected = t == selected_ticker
+                    fig_perf.add_trace(go.Scatter(
+                        x=series.index, y=series, mode="lines",
+                        name=f"{t} ({peer_df[peer_df['Ticker']==t]['Name'].iloc[0][:15] if not peer_df[peer_df['Ticker']==t].empty else t})",
+                        line=dict(width=3 if is_selected else 2, color='#667eea' if is_selected else None),
+                        opacity=1 if is_selected else 0.7
+                    ))
+
+                fig_perf.update_layout(
+                    title=f"Relative Performance - {period}",
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    height=400,
+                    margin=dict(l=0, r=0, t=40, b=0),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    font=dict(family="Inter"),
+                    xaxis=dict(gridcolor="rgba(255,255,255,0.04)", zeroline=False),
+                    yaxis=dict(gridcolor="rgba(255,255,255,0.04)", zeroline=False, title="% Change")
+                )
+                st.plotly_chart(fig_perf, use_container_width=True)
+
     else:
-        st.info("Peer data comparison not available for this sector.")
+        st.warning("Unable to fetch peer comparison data. Please try again later.")
 
 
 # ── TAB 5: HISTORICAL ACTIONS
