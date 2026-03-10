@@ -28,9 +28,7 @@ enableXsrfProtection = true
 [browser]
 gatherUsageStats = false
 
-# Performance
-[client.caching]
-cacheControlHeader = "public, max-age=3600"
+# Performance (streamlit cloud handles caching automatically, no explicit client.caching needed)
 
 # Disable streamlit branding on mobile-friendly deployments
 # The CSS handles this with customization
